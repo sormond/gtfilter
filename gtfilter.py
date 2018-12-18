@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 
-""" Function of gtfilter: filter vcf files with genotype.
+""" Function of gtfilter: filter vcf files with genotype. Can invoke argument which allows one or more disease-phenotype positive sample to not carry variant.
 Code written by Shannon Ormond 2018. Contact email: s.ormond@massey.ac.nz """
 
 import vcf
+
 import argparse
+
 from functools import reduce
 
 
 # command line stuff
 parser = argparse.ArgumentParser()
 
-parser.add_argument('-p', '--positive', help = "Required argument. VCF file to use.")
+parser.add_argument('-p', '--positive', help = "Required argument. Tab-delimited file containing disease-positive sample names.")
 
-parser.add_argument('-n', '--negative', help = "Required argument. Stem name of VCF file to make.")
+parser.add_argument('-n', '--negative', help = "Required argument. Tab-delimited file containing disease-negative sample names.")
 
-parser.add_argument('-v', '--inputvcf', help = "Required argument. Stem name of VCF file to make.")
+parser.add_argument('-v', '--inputvcf', help = "Required argument. Input VCF.")
 
 parser.add_argument('-o', '--outputvcf', help = "Required argument. Stem name of VCF file to make.")
 
@@ -23,25 +25,27 @@ parser.add_argument('-len', '--leniency', type = int, help = "Optional argument.
 
 args = parser.parse_args()
 
-# calling main function
-a = args.inputvcf
 
-b = args.outputvcf
-
+# reads in samples from disease-pos .txt sample file and puts in list 'pos'
 f = open(args.positive, 'r')
+
 pos = f.read().splitlines()
+
 f.close
 
+
+# reads in samples from disease-neg .txt sample file and puts in list 'neg'
 f = open(args.negative, 'r')
+
 neg = f.read().splitlines()
+
 f.close
 
-# listlen = len(pos) + len(neg)
-# expectedList = [1] * listlen
 
-
+# sets leniency if argument is made
 if args.leniency :
     setlen = args.leniency
+    num = setlen * 2
 else :
     setlen = 0
 
@@ -49,54 +53,57 @@ else :
 # reads in vcf file line by line
 vcf_reader = vcf.Reader(open(args.inputvcf, 'r'))
 
+
 # creates new vcf file
 vcf_writer = vcf.Writer(open(args.outputvcf + ".vcf", 'w'), vcf_reader)
 
+
+# iterates through each variant
 for variant in vcf_reader:
 
-    newlist = []
+    # list which will be used to test whether variant is passed on rejected
+    thres_list = []
 
+    # iterates through pos sample
     for element in pos :
 
         if variant.genotype(element)['GT'] == "1/1" or variant.genotype(element)['GT'] == "0/1" or variant.genotype(element)['GT'] == "./." :
-            newlist.append(1)
+            thres_list.append(1)
 
         else :
-            newlist.append(2)
+            thres_list.append(2)
     
+    # iterates through neg sample
     for element in neg :
 
         if variant.genotype(element)['GT'] == "0/0" or variant.genotype(element)['GT'] == "./." :
-            newlist.append(1)
+            thres_list.append(1)
 
         else :
-            newlist.append(0)
+            thres_list.append(0)
 
-    # product of newlist
-    product = reduce(lambda x, y: x*y, newlist)
+    # product of thres_list
+    product = reduce(lambda x, y: x*y, thres_list)
 
-    # disallows disease negative to carry variant
+    # disallows disease negative to carry variant as product will be zero if neg sample carries variant
     if product == 0 :
 
         exit
 
     else :
 
+        # if product is 1 it will pass variant
         if product == 1 :
 
             # writes the record (line from input vcf file) to new vcf
                 vcf_writer.write_record(variant)
 
+        # if product is not 1 it will check whether a value > 0 for setlen exists, and if so it will check pass variant if product is below threshold. I.e. if setlen = 1, num will be 2, and product cannot be > 2 for variant to be passed.
         elif setlen != 0 :
-
-            num = setlen * 2
 
             if product <= num :
 
-                print(product)
-
                 # writes the record (line from input vcf file) to new vcf
                 vcf_writer.write_record(variant)
-
 
 vcf_writer.close
