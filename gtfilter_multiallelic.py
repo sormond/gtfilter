@@ -57,9 +57,20 @@ vcf_reader = vcf.Reader(open(args.inputvcf, 'r'))
 # creates new vcf file
 vcf_writer = vcf.Writer(open(args.outputvcf + ".vcf", 'w'), vcf_reader)
 
+prev_genomic_pos = -101
+
+thres_list = [0] * (len(pos) + len(neg))
+
+nearby_allele = False
 
 # iterates through each variant
 for variant in vcf_reader:
+
+    genomic_position = variant.POS
+
+    if genomic_position - 100 <= prev_genomic_pos <= genomic_position + 100 :
+
+        nearby_allele = True
 
     # list which will be used to test whether variant is passed on rejected
     thres_list = []
@@ -105,5 +116,15 @@ for variant in vcf_reader:
 
                 # writes the record (line from input vcf file) to new vcf
                 vcf_writer.write_record(variant)
+
+        elif nearby_allele == True :
+
+            print('found one')
+
+    prev_genomic_pos = variant.POS
+
+    prev_threshold_list = thres_list
+
+    nearby_allele = False
 
 vcf_writer.close
